@@ -10,6 +10,7 @@ import re
 from flask import abort
 from flask import url_for
 import markdown
+from pymongo import MongoClient
 
 
 def clean_url(url):
@@ -165,9 +166,10 @@ class Processor(object):
 
 
 class Page(object):
-    def __init__(self, path, url, new=False):
-        self.path = path
-        self.url = url
+    def __init__(self, db_page, new=False):
+        #self.path = path
+        #self.url = url
+        self.db_page = db_page
         self._meta = OrderedDict()
         if not new:
             self.load()
@@ -177,8 +179,14 @@ class Page(object):
         return u"<Page: {}@{}>".format(self.url, self.path)
 
     def load(self):
-        with open(self.path, 'r', encoding='utf-8') as f:
-            self.content = f.read()
+        # with open(self.path, 'r', encoding='utf-8') as f:
+        # self.content = f.read()
+        if 'title' in self.db_page:
+            self.content = 'title: ' + self.db_page['title'] + '\n'
+        if 'tags' in self.db_page:
+            self.content += 'tags: ' + self.db_page['tags'] + '\n\n'
+        if 'body' in self.db_page:
+            self.content += self.db_page['body']
 
     def render(self):
         processor = Processor(self.content)
@@ -303,19 +311,32 @@ class Wiki(object):
             :returns: a list of all the wiki pages
             :rtype: list
         """
+        pages = []
+        try:
+            client = MongoClient()
+            db = client.wiki
+            db_pages = db.wiki.find()
+            for db_page in db_pages:
+                page = Page(db_page)
+                pages.append(page)
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
         # make sure we always have the absolute path for fixing the
         # walk path
-        pages = []
-        root = os.path.abspath(self.root)
-        for cur_dir, _, files in os.walk(root):
-            # get the url of the current directory
-            cur_dir_url = cur_dir[len(root)+1:]
-            for cur_file in files:
-                path = os.path.join(cur_dir, cur_file)
-                if cur_file.endswith('.md'):
-                    url = clean_url(os.path.join(cur_dir_url, cur_file[:-3]))
-                    page = Page(path, url)
-                    pages.append(page)
+
+        #root = os.path.abspath(self.root)
+        # for cur_dir, _, files in os.walk(root):
+        #     # get the url of the current directory
+        #     cur_dir_url = cur_dir[len(root)+1:]
+        #     for cur_file in files:
+        #         path = os.path.join(cur_dir, cur_file)
+        #         if cur_file.endswith('.md'):
+        #             url = clean_url(os.path.join(cur_dir_url, cur_file[:-3]))
+        #             page = Page(path, url)
+        #             pages.append(page)
+
         return sorted(pages, key=lambda x: x.title.lower())
 
     def index_by(self, key):
