@@ -166,9 +166,9 @@ class Processor(object):
 
 
 class Page(object):
-    def __init__(self, db_page, new=False):
+    def __init__(self, url, db_page, new=False):
         #self.path = path
-        #self.url = url
+        self.url = url
         self.db_page = db_page
         self._meta = OrderedDict()
         if not new:
@@ -317,7 +317,10 @@ class Wiki(object):
             db = client.wiki
             db_pages = db.wiki.find()
             for db_page in db_pages:
-                page = Page(db_page)
+                url = ''
+                if 'url' in db_page:
+                    url = db_page['url']
+                page = Page(url, db_page)
                 pages.append(page)
         except Exception, e:
             print str(e)
