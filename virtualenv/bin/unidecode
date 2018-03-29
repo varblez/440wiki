@@ -1,4 +1,4 @@
-#!/home/test/440wiki/virtualenv/bin/python
+#!/home/core/440wiki/virtualenv/bin/python
 
 # -*- coding: utf-8 -*-
 import re
