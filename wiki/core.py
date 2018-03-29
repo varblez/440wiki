@@ -258,11 +258,23 @@ class Wiki(object):
         return os.path.exists(path)
 
     def get(self, url):
-        path = self.path(url)
+        #path = self.path(url)
         #path = os.path.join(self.root, url + '.md')
-        if self.exists(url):
-            return Page(path, url)
-        return None
+
+        try:
+            client = MongoClient()
+            db = client.wiki
+            db_pages = db.wiki.find()
+            for db_page in db_pages:
+                if 'url' in db_page:
+                    if url == db_page['url']:
+                        return Page(url, db_page)
+            return None
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
+
 
     def get_or_404(self, url):
         page = self.get(url)
