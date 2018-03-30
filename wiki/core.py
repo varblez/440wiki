@@ -254,8 +254,19 @@ class Wiki(object):
         return os.path.join(self.root, url + '.md')
 
     def exists(self, url):
-        path = self.path(url)
-        return os.path.exists(path)
+        #path = self.path(url)
+        #return os.path.exists(path)
+        try:
+            client = MongoClient()
+            db = client.wiki
+            db_page = db.wiki.find_one({'url': url})
+            if 'url' in db_page and url == db_page['url']:
+                return True
+            return False
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
 
     def get(self, url):
         #path = self.path(url)
@@ -307,11 +318,22 @@ class Wiki(object):
         os.rename(source, target)
 
     def delete(self, url):
-        path = self.path(url)
+        #path = self.path(url)
         if not self.exists(url):
             return False
-        os.remove(path)
-        return True
+        try:
+            client = MongoClient()
+            db = client.wiki
+            result = db.wiki.delete_one({'url': url})
+            if result == 1:
+                return True
+            return False
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
+        #os.remove(path)
+        #return True
 
     def index(self):
         """
