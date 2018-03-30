@@ -193,15 +193,17 @@ class Page(object):
         self._html, self.body, self._meta = processor.process()
 
     def save(self, update=True):
-        folder = os.path.dirname(self.path)
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        with open(self.path, 'w', encoding='utf-8') as f:
-            for key, value in self._meta.items():
-                line = u'%s: %s\n' % (key, value)
-                f.write(line)
-            f.write(u'\n')
-            f.write(self.body.replace(u'\r\n', u'\n'))
+        # folder = os.path.dirname(self.path)
+        # if not os.path.exists(folder):
+        #     os.makedirs(folder)
+        # with open(self.path, 'w', encoding='utf-8') as f:
+        #     for key, value in self._meta.items():
+        #         line = u'%s: %s\n' % (key, value)
+        #         f.write(line)
+        #     f.write(u'\n')
+        #     f.write(self.body.replace(u'\r\n', u'\n'))
+        my_db = Db()
+        my_db.insert(self.url, self.title, self.tags, self.body)
         if update:
             self.load()
             self.render()
@@ -246,32 +248,8 @@ class Page(object):
         self['tags'] = value
 
 
-class Wiki(object):
-    def __init__(self, root):
-        self.root = root
-
-    def path(self, url):
-        return os.path.join(self.root, url + '.md')
-
-    def exists(self, url):
-        #path = self.path(url)
-        #return os.path.exists(path)
-        try:
-            client = MongoClient()
-            db = client.wiki
-            db_page = db.wiki.find_one({'url': url})
-            if 'url' in db_page and url == db_page['url']:
-                return True
-            return False
-        except Exception, e:
-            print str(e)
-        finally:
-            client.close()
-
-    def get(self, url):
-        #path = self.path(url)
-        #path = os.path.join(self.root, url + '.md')
-
+class Db(object):
+    def get_page(self, url):
         try:
             client = MongoClient()
             db = client.wiki
@@ -284,6 +262,86 @@ class Wiki(object):
         finally:
             client.close()
 
+    def get_pages(self):
+        pages = []
+        try:
+            client = MongoClient()
+            db = client.wiki
+            db_pages = db.wiki.find()
+            for db_page in db_pages:
+                if 'url' in db_page:
+                    url = db_page['url']
+                    page = Page(url, db_page)
+                    pages.append(page)
+                return pages
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
+
+    @staticmethod
+    def exists(url):
+        try:
+            client = MongoClient()
+            db = client.wiki
+            db_page = db.wiki.find_one({'url': url})
+            if db_page is not None and url in db_page['url']:
+                return True
+            return False
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
+
+    def delete(self, url):
+        try:
+            client = MongoClient()
+            db = client.wiki
+            result = db.wiki.delete_one({'url': url})
+            if result is not None and 1 in result['deleted_count']:
+                return True
+            return False
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
+
+    def insert(self, url, title, tags, body):
+            try:
+                client = MongoClient()
+                db = client.wiki
+                if self.exists(url):
+                    # Update page
+                    page_id = self.get_page(url)
+                    page_id = page_id['_id']
+                    db.wiki.update_one({'_id': page_id}, {'$set': {'url': url, 'title': title, 'tags': tags, 'body': body}}, {'upsert': 'true'})
+                    return True
+                else:
+                    # Create new page
+                    db.wiki.insert_one({'url': url, 'title': title, 'tags': tags, 'body': body})
+                    return True
+            except Exception, e:
+                print str(e)
+            finally:
+                client.close()
+            return False
+
+
+class Wiki(object):
+    def __init__(self, root):
+        self.root = root
+
+    def path(self, url):
+        return os.path.join(self.root, url + '.md')
+
+    def exists(self, url):
+        my_db = Db
+        return my_db.exists(url)
+
+    def get(self, url):
+        my_db = Db()
+        return my_db.get_page(url)
+
     def get_or_404(self, url):
         page = self.get(url)
         if page:
@@ -291,10 +349,10 @@ class Wiki(object):
         abort(404)
 
     def get_bare(self, url):
-        path = self.path(url)
+        my_db = Db()
         if self.exists(url):
             return False
-        return Page(path, url, new=True)
+        return Page(url, '', new=True)
 
     def move(self, url, newurl):
         source = os.path.join(self.root, url) + '.md'
@@ -318,22 +376,8 @@ class Wiki(object):
         os.rename(source, target)
 
     def delete(self, url):
-        #path = self.path(url)
-        if not self.exists(url):
-            return False
-        try:
-            client = MongoClient()
-            db = client.wiki
-            result = db.wiki.delete_one({'url': url})
-            if result == 1:
-                return True
-            return False
-        except Exception, e:
-            print str(e)
-        finally:
-            client.close()
-        #os.remove(path)
-        #return True
+        my_db = Db()
+        my_db.delete(url)
 
     def index(self):
         """
@@ -342,36 +386,11 @@ class Wiki(object):
             :returns: a list of all the wiki pages
             :rtype: list
         """
-        pages = []
-        try:
-            client = MongoClient()
-            db = client.wiki
-            db_pages = db.wiki.find()
-            for db_page in db_pages:
-                url = ''
-                if 'url' in db_page:
-                    url = db_page['url']
-                page = Page(url, db_page)
-                pages.append(page)
-        except Exception, e:
-            print str(e)
-        finally:
-            client.close()
-        # make sure we always have the absolute path for fixing the
-        # walk path
-
-        #root = os.path.abspath(self.root)
-        # for cur_dir, _, files in os.walk(root):
-        #     # get the url of the current directory
-        #     cur_dir_url = cur_dir[len(root)+1:]
-        #     for cur_file in files:
-        #         path = os.path.join(cur_dir, cur_file)
-        #         if cur_file.endswith('.md'):
-        #             url = clean_url(os.path.join(cur_dir_url, cur_file[:-3]))
-        #             page = Page(path, url)
-        #             pages.append(page)
-
-        return sorted(pages, key=lambda x: x.title.lower())
+        my_db = Db()
+        pages = my_db.get_pages()
+        if pages is not None:
+            return sorted(pages, key=lambda x: x.title.lower())
+        return None
 
     def index_by(self, key):
         """
@@ -400,17 +419,19 @@ class Wiki(object):
     def get_tags(self):
         pages = self.index()
         tags = {}
-        for page in pages:
-            pagetags = page.tags.split(',')
-            for tag in pagetags:
-                tag = tag.strip()
-                if tag == '':
-                    continue
-                elif tags.get(tag):
-                    tags[tag].append(page)
-                else:
-                    tags[tag] = [page]
-        return tags
+        if pages is not None:
+            for page in pages:
+                pagetags = page.tags.split(',')
+                for tag in pagetags:
+                    tag = tag.strip()
+                    if tag == '':
+                        continue
+                    elif tags.get(tag):
+                        tags[tag].append(page)
+                    else:
+                        tags[tag] = [page]
+            return tags
+        return None
 
     def index_by_tag(self, tag):
         pages = self.index()
@@ -424,9 +445,11 @@ class Wiki(object):
         pages = self.index()
         regex = re.compile(term, re.IGNORECASE if ignore_case else 0)
         matched = []
-        for page in pages:
-            for attr in attrs:
-                if regex.search(getattr(page, attr)):
-                    matched.append(page)
-                    break
-        return matched
+        if pages is not None:
+            for page in pages:
+                for attr in attrs:
+                    if regex.search(getattr(page, attr)):
+                        matched.append(page)
+                        break
+            return matched
+        return None
