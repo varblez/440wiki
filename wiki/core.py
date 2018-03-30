@@ -264,17 +264,14 @@ class Wiki(object):
         try:
             client = MongoClient()
             db = client.wiki
-            db_pages = db.wiki.find()
-            for db_page in db_pages:
-                if 'url' in db_page:
-                    if url == db_page['url']:
-                        return Page(url, db_page)
+            db_page = db.wiki.find_one({'url': url})
+            if 'url' in db_page and url == db_page['url']:
+                return Page(url, db_page)
             return None
         except Exception, e:
             print str(e)
         finally:
             client.close()
-
 
     def get_or_404(self, url):
         page = self.get(url)
