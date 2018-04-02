@@ -167,7 +167,6 @@ class Processor(object):
 
 class Page(object):
     def __init__(self, url, db_page, new=False):
-        #self.path = path
         self.url = url
         self.db_page = db_page
         self._meta = OrderedDict()
@@ -179,8 +178,9 @@ class Page(object):
         return u"<Page: {}@{}>".format(self.url, self.path)
 
     def load(self):
-        # with open(self.path, 'r', encoding='utf-8') as f:
-        # self.content = f.read()
+        if self.db_page == '':
+            my_db = Db()
+            self.db_page = my_db.get_db_page(self.url)
         if 'title' in self.db_page:
             self.content = 'title: ' + self.db_page['title'] + '\n'
         if 'tags' in self.db_page:
@@ -193,15 +193,6 @@ class Page(object):
         self._html, self.body, self._meta = processor.process()
 
     def save(self, update=True):
-        # folder = os.path.dirname(self.path)
-        # if not os.path.exists(folder):
-        #     os.makedirs(folder)
-        # with open(self.path, 'w', encoding='utf-8') as f:
-        #     for key, value in self._meta.items():
-        #         line = u'%s: %s\n' % (key, value)
-        #         f.write(line)
-        #     f.write(u'\n')
-        #     f.write(self.body.replace(u'\r\n', u'\n'))
         my_db = Db()
         my_db.insert(self.url, self.title, self.tags, self.body)
         if update:
@@ -262,6 +253,19 @@ class Db(object):
         finally:
             client.close()
 
+    def get_db_page(self, url):
+        try:
+            client = MongoClient()
+            db = client.wiki
+            db_page = db.wiki.find_one({'url': url})
+            if 'url' in db_page and url == db_page['url']:
+                return db_page
+            return None
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
+
     def get_pages(self):
         pages = []
         try:
@@ -273,7 +277,7 @@ class Db(object):
                     url = db_page['url']
                     page = Page(url, db_page)
                     pages.append(page)
-                return pages
+            return pages
         except Exception, e:
             print str(e)
         finally:
@@ -312,9 +316,9 @@ class Db(object):
                 db = client.wiki
                 if self.exists(url):
                     # Update page
-                    page_id = self.get_page(url)
+                    page_id = self.get_db_page(url)
                     page_id = page_id['_id']
-                    db.wiki.update_one({'_id': page_id}, {'$set': {'url': url, 'title': title, 'tags': tags, 'body': body}}, {'upsert': 'true'})
+                    db.wiki.update_one({'_id': page_id}, {'$set': {'url': url, 'title': title, 'tags': tags, 'body': body}}, upsert=True)
                     return True
                 else:
                     # Create new page
@@ -325,6 +329,21 @@ class Db(object):
             finally:
                 client.close()
             return False
+
+    def update_url(self, url, new_url):
+        try:
+            client = MongoClient()
+            db = client.wiki
+            # Update page
+            page_id = self.get_db_page(url)
+            page_id = page_id['_id']
+            db.wiki.update_one({'_id': page_id}, {'$set': {'url': new_url}}, upsert=True)
+            return True
+        except Exception, e:
+            print str(e)
+        finally:
+            client.close()
+        return False
 
 
 class Wiki(object):
@@ -349,31 +368,13 @@ class Wiki(object):
         abort(404)
 
     def get_bare(self, url):
-        my_db = Db()
         if self.exists(url):
             return False
         return Page(url, '', new=True)
 
     def move(self, url, newurl):
-        source = os.path.join(self.root, url) + '.md'
-        target = os.path.join(self.root, newurl) + '.md'
-        # normalize root path (just in case somebody defined it absolute,
-        # having some '../' inside) to correctly compare it to the target
-        root = os.path.normpath(self.root)
-        # get root path longest common prefix with normalized target path
-        common = os.path.commonprefix((root, os.path.normpath(target)))
-        # common prefix length must be at least as root length is
-        # otherwise there are probably some '..' links in target path leading
-        # us outside defined root directory
-        if len(common) < len(root):
-            raise RuntimeError(
-                'Possible write attempt outside content directory: '
-                '%s' % newurl)
-        # create folder if it does not exists yet
-        folder = os.path.dirname(target)
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        os.rename(source, target)
+        my_db = Db()
+        my_db.update_url(url, newurl)
 
     def delete(self, url):
         my_db = Db()
