@@ -240,87 +240,70 @@ class Page(object):
 
 
 class Db(object):
-    def __init__(self):
-        self.client = MongoClient()
-        self.db = self.client.wiki
+    # Static variables so only one connection is opened
+    client = MongoClient()
+    db = client.wiki
 
-    def get_page(self, url):
-        try:
-            db_page = self.db.wiki.find_one({'url': url})
-            if 'url' in db_page and url == db_page['url']:
-                return url, db_page
-            return None
-        except Exception, e:
-            print str(e)
-        finally:
-            self.client.close()
-
-    def get_pages(self):
-        pages = []
-        try:
-            db_pages = self.db.wiki.find()
-            for db_page in db_pages:
-                if 'url' in db_page:
-                    url = db_page['url']
-                    pages.append((url, db_page))
-            return pages
-        except Exception, e:
-            print str(e)
-        finally:
-            self.client.close()
-
-    def delete(self, url):
-        try:
-            result = self.db.wiki.delete_one({'url': url})
-            if result is not None and 1 in result['deleted_count']:
-                return True
-            return False
-        except Exception, e:
-            print str(e)
-        finally:
-            self.client.close()
-
-    def insert(self, url, title, tags, body):
+    def try_catch(func):
+        def wrapped(*args, **kwargs):
             try:
-                if self.exists(url):
-                    # Update page
-                    page_id = (self.get_page(url))[1]
-                    page_id = page_id['_id']
-                    self.db.wiki.update_one({'_id': page_id}, {'$set': {'url': url, 'title': title, 'tags': tags, 'body': body}}, upsert=True)
-                    return True
-                else:
-                    # Create new page
-                    self.db.wiki.insert_one({'url': url, 'title': title, 'tags': tags, 'body': body})
-                    return True
-                return False
+                return func(*args, **kwargs)
             except Exception, e:
                 print str(e)
-            finally:
-                self.client.close()
+        return wrapped
 
-    def update_url(self, url, new_url):
-        try:
+    @try_catch
+    def get_page(self, url):
+        db_page = self.db.wiki.find_one({'url': url})
+        if 'url' in db_page and url == db_page['url']:
+            return url, db_page
+        return None
+
+    @try_catch
+    def get_pages(self):
+        pages = []
+        db_pages = self.db.wiki.find()
+        for db_page in db_pages:
+            if 'url' in db_page:
+                url = db_page['url']
+                pages.append((url, db_page))
+        return pages
+
+    @try_catch
+    def delete(self, url):
+        result = self.db.wiki.delete_one({'url': url})
+        if result is not None and 1 in result['deleted_count']:
+            return True
+        return False
+
+    @try_catch
+    def insert(self, url, title, tags, body):
+        if self.exists(url):
             # Update page
             page_id = (self.get_page(url))[1]
             page_id = page_id['_id']
-            self.db.wiki.update_one({'_id': page_id}, {'$set': {'url': new_url}}, upsert=True)
+            self.db.wiki.update_one({'_id': page_id}, {'$set': {'url': url, 'title': title, 'tags': tags, 'body': body}}, upsert=True)
             return True
-        except Exception, e:
-            print str(e)
-        finally:
-            self.client.close()
+        else:
+            # Create new page
+            self.db.wiki.insert_one({'url': url, 'title': title, 'tags': tags, 'body': body})
+            return True
         return False
 
+    @try_catch
+    def update_url(self, url, new_url):
+        # Update page
+        page_id = (self.get_page(url))[1]
+        page_id = page_id['_id']
+        self.db.wiki.update_one({'_id': page_id}, {'$set': {'url': new_url}}, upsert=True)
+        return True
+
+    @try_catch
     def exists(self, url):
-        try:
-            db_page = self.db.wiki.find_one({'url': url})
-            if db_page is not None and url in db_page['url']:
-                return True
-            return False
-        except Exception, e:
-            print str(e)
-        finally:
-            self.client.close()
+        db_page = self.db.wiki.find_one({'url': url})
+        if db_page is not None and url in db_page['url']:
+            return True
+        return False
 
 
 class Wiki(object):
