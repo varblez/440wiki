@@ -180,7 +180,7 @@ class Page(object):
     def load(self):
         if self.db_page == '':
             my_db = Db()
-            self.db_page = my_db.get_db_page(self.url)
+            self.db_page = (my_db.get_page(self.url))[1]
         if 'title' in self.db_page:
             self.content = 'title: ' + self.db_page['title'] + '\n'
         if 'tags' in self.db_page:
@@ -240,110 +240,87 @@ class Page(object):
 
 
 class Db(object):
+    def __init__(self):
+        self.client = MongoClient()
+        self.db = self.client.wiki
+
     def get_page(self, url):
         try:
-            client = MongoClient()
-            db = client.wiki
-            db_page = db.wiki.find_one({'url': url})
+            db_page = self.db.wiki.find_one({'url': url})
             if 'url' in db_page and url == db_page['url']:
-                return Page(url, db_page)
+                return url, db_page
             return None
         except Exception, e:
             print str(e)
         finally:
-            client.close()
-
-    def get_db_page(self, url):
-        try:
-            client = MongoClient()
-            db = client.wiki
-            db_page = db.wiki.find_one({'url': url})
-            if 'url' in db_page and url == db_page['url']:
-                return db_page
-            return None
-        except Exception, e:
-            print str(e)
-        finally:
-            client.close()
+            self.client.close()
 
     def get_pages(self):
         pages = []
         try:
-            client = MongoClient()
-            db = client.wiki
-            db_pages = db.wiki.find()
+            db_pages = self.db.wiki.find()
             for db_page in db_pages:
                 if 'url' in db_page:
                     url = db_page['url']
-                    page = Page(url, db_page)
-                    pages.append(page)
+                    pages.append((url, db_page))
             return pages
         except Exception, e:
             print str(e)
         finally:
-            client.close()
-
-    @staticmethod
-    def exists(url):
-        try:
-            client = MongoClient()
-            db = client.wiki
-            db_page = db.wiki.find_one({'url': url})
-            if db_page is not None and url in db_page['url']:
-                return True
-            return False
-        except Exception, e:
-            print str(e)
-        finally:
-            client.close()
+            self.client.close()
 
     def delete(self, url):
         try:
-            client = MongoClient()
-            db = client.wiki
-            result = db.wiki.delete_one({'url': url})
+            result = self.db.wiki.delete_one({'url': url})
             if result is not None and 1 in result['deleted_count']:
                 return True
             return False
         except Exception, e:
             print str(e)
         finally:
-            client.close()
+            self.client.close()
 
     def insert(self, url, title, tags, body):
             try:
-                client = MongoClient()
-                db = client.wiki
                 if self.exists(url):
                     # Update page
-                    page_id = self.get_db_page(url)
+                    page_id = (self.get_page(url))[1]
                     page_id = page_id['_id']
-                    db.wiki.update_one({'_id': page_id}, {'$set': {'url': url, 'title': title, 'tags': tags, 'body': body}}, upsert=True)
+                    self.db.wiki.update_one({'_id': page_id}, {'$set': {'url': url, 'title': title, 'tags': tags, 'body': body}}, upsert=True)
                     return True
                 else:
                     # Create new page
-                    db.wiki.insert_one({'url': url, 'title': title, 'tags': tags, 'body': body})
+                    self.db.wiki.insert_one({'url': url, 'title': title, 'tags': tags, 'body': body})
                     return True
+                return False
             except Exception, e:
                 print str(e)
             finally:
-                client.close()
-            return False
+                self.client.close()
 
     def update_url(self, url, new_url):
         try:
-            client = MongoClient()
-            db = client.wiki
             # Update page
-            page_id = self.get_db_page(url)
+            page_id = (self.get_page(url))[1]
             page_id = page_id['_id']
-            db.wiki.update_one({'_id': page_id}, {'$set': {'url': new_url}}, upsert=True)
+            self.db.wiki.update_one({'_id': page_id}, {'$set': {'url': new_url}}, upsert=True)
             return True
         except Exception, e:
             print str(e)
         finally:
-            client.close()
+            self.client.close()
         return False
+
+    def exists(self, url):
+        try:
+            db_page = self.db.wiki.find_one({'url': url})
+            if db_page is not None and url in db_page['url']:
+                return True
+            return False
+        except Exception, e:
+            print str(e)
+        finally:
+            self.client.close()
 
 
 class Wiki(object):
@@ -354,12 +331,16 @@ class Wiki(object):
         return os.path.join(self.root, url + '.md')
 
     def exists(self, url):
-        my_db = Db
+        my_db = Db()
         return my_db.exists(url)
 
     def get(self, url):
         my_db = Db()
-        return my_db.get_page(url)
+        page = my_db.get_page(url)
+        if page is not None:
+            page = Page(page[0], page[1])
+            return page
+        return None
 
     def get_or_404(self, url):
         page = self.get(url)
@@ -388,7 +369,11 @@ class Wiki(object):
             :rtype: list
         """
         my_db = Db()
-        pages = my_db.get_pages()
+        pages = []
+        for url, db_page in my_db.get_pages():
+            page = Page(url, db_page)
+            pages.append(page)
+        #pages = my_db.get_pages()
         if pages is not None:
             return sorted(pages, key=lambda x: x.title.lower())
         return None
