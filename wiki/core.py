@@ -2,15 +2,23 @@
     Wiki core
     ~~~~~~~~~
 """
-from collections import OrderedDict
-from io import open
 import os
 import re
+from collections import OrderedDict
+from io import open
 
+import markdown
+import pdfkit
+from flask import redirect
 from flask import abort
 from flask import url_for
-import markdown
+from flask import make_response
+from flask_mail import Mail
+from flask_mail import Message
+from flask import Flask
+from wiki.export_pdf import export_pdf
 
+app =Flask(__name__)
 
 def clean_url(url):
     """
@@ -185,6 +193,7 @@ class Page(object):
         self._html, self.body, self._meta = processor.process()
 
     def save(self, update=True):
+        print "ok"
         folder = os.path.dirname(self.path)
         if not os.path.exists(folder):
             os.makedirs(folder)
@@ -296,6 +305,49 @@ class Wiki(object):
         os.remove(path)
         return True
 
+    def savePDF(self, url):
+        #exp = export_pdf()
+        #pdf = export_pdf.return_pdf(exp,self.get_or_404(url))
+        pdf = self.pdf(url)
+        resp = make_response(pdf)
+        resp.headers['Content-Type'] = 'application/pdf'
+        resp.headers['Content-Disposition'] = \
+            'inline; filename=%s.pdf' % 'yourfilename'
+
+        return resp
+
+    def pdf(self, url):
+        page = self.get_or_404(url)
+
+        html_text = markdown.markdown(page.html, output_format='html4')
+
+        path_wkthmltopdf = r'C:\Python27\wkhtmltopdf\bin\wkhtmltopdf.exe'
+        config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
+        options = {'--header-html': r'C:\Users\zv\PycharmProjects\Riki\wiki\web\templates\header.html'}
+        pdf = pdfkit.from_string(html_text, False, options=options, configuration=config)
+
+        return pdf
+
+    def email(self, url, email):
+        pdf = self.pdf(url)
+        Mail(app=None)
+        app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+        app.config['MAIL_PORT'] = 465
+        app.config['MAIL_USERNAME'] = 'bestwikiteam@gmail.com'
+        app.config['MAIL_PASSWORD'] = 'Software440'
+        app.config['MAIL_USE_TLS'] = False
+        app.config['MAIL_USE_SSL'] = True
+        mail = Mail(app)
+        msg = Message("File Export",
+                      sender="fallenreddit@gmail.com",
+                      recipients=[email])
+        msg.attach("page.pdf", "page/pdf", pdf)
+        mail.send(msg)
+        #exp = export_pdf()
+        #export_pdf.mail_pdf(exp, self.get_or_404(url),email)
+        return redirect(url)
+
+
     def index(self):
         """
             Builds up a list of all the available pages.
@@ -369,6 +421,7 @@ class Wiki(object):
         pages = self.index()
         regex = re.compile(term, re.IGNORECASE if ignore_case else 0)
         matched = []
+        print Wiki.get_tags(self)
         for page in pages:
             for attr in attrs:
                 if regex.search(getattr(page, attr)):

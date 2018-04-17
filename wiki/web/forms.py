@@ -33,6 +33,8 @@ class SearchForm(Form):
         # FIXME: default is not correctly populated
         default=True)
 
+class emailForm(Form):
+    term = TextField(' ',[InputRequired()])
 
 class EditorForm(Form):
     title = TextField('', [InputRequired()])

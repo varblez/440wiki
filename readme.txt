@@ -1,3 +1,7 @@
+Riki-deploy is the version that is modified to be executed from Ubuntu server. 
+You can use PyCharm and command line tools to start the Flask/Wiki system with “python Riki.py”.
+You can access the wiki [http://wiki440.ms2ms.com](http://wiki440.ms2ms.com).
+
 ## Configuration
     
 1. Update CONTENT_DIR and USER_DIR in config.py

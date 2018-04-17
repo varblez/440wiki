@@ -12,19 +12,20 @@ from flask_login import current_user
 from flask_login import login_required
 from flask_login import login_user
 from flask_login import logout_user
+from flask import Flask
 
 from wiki.core import Processor
+from wiki.web import current_users
+from wiki.web import current_wiki
 from wiki.web.forms import EditorForm
 from wiki.web.forms import LoginForm
 from wiki.web.forms import SearchForm
 from wiki.web.forms import URLForm
-from wiki.web import current_wiki
-from wiki.web import current_users
+from wiki.web.forms import emailForm
 from wiki.web.user import protect
 
-
 bp = Blueprint('wiki', __name__)
-
+app =Flask(__name__)
 
 @bp.route('/')
 @protect
@@ -60,8 +61,8 @@ def create():
 
 
 @bp.route('/edit/<path:url>/', methods=['GET', 'POST'])
-@protect
 def edit(url):
+    #print url
     page = current_wiki.get(url)
     form = EditorForm(obj=page)
     if form.validate_on_submit():
@@ -73,6 +74,17 @@ def edit(url):
         return redirect(url_for('wiki.display', url=url))
     return render_template('editor.html', form=form, page=page)
 
+@bp.route('/upload', methods=['GET', 'POST'])
+def upload(file):
+    print "yes"
+    return
+    #if request.method == 'POST':
+        #file = request.files['file']
+        #print "yes"
+        ##extension = os.path.splitext(file.filename)[1]
+        ##f_name = str(uuid.uuid4()) + extension
+        ##file.save(os.path.join(bp.config['UPLOAD_FOLDER'], f_name))
+        #return
 
 @bp.route('/preview/', methods=['POST'])
 @protect
@@ -93,6 +105,27 @@ def move(url):
         current_wiki.move(url, newurl)
         return redirect(url_for('wiki.display', url=newurl))
     return render_template('move.html', form=form, page=page)
+
+@bp.route('/export/<path:url>', methods=['GET', 'POST'])
+@protect
+def export(url):
+    page = current_wiki.get_or_404(url)
+    form = emailForm()
+    flash('Page "%s" was sent.' % page.title, 'success')
+    if form.validate_on_submit():
+        rec = form.term.data
+        return current_wiki.email(url, rec)
+    return render_template('export.html',form=form, page=page)
+
+@bp.route('/pdf/<path:url>/')
+@protect
+def savePDF(url):
+    page = current_wiki.get_or_404(url)
+
+    flash('Page "%s" was saved.' % page.title, 'success')
+    print 'here'
+    return current_wiki.savePDF(url)
+
 
 
 @bp.route('/delete/<path:url>/')

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Export a page{% endblock title %}
+{% block content %}
+    <a href="{{ url_for('wiki.savePDF', url=page.url) }}" target="blank"  class="btn">Open as PDF</a>
+
+
+
+            <form method="POST" class="form-inline">
+                {{ form.hidden_tag() }}
+                <div style="display:inline-block;margin-right:10px;">
+                {{ input(form.term, placeholder="email@example.com ", autocomplete="off") }}
+                </div>
+                <input type="submit" class="btn btn-success" value="Send" style="display:inline-block;">
+            </form>
+
+{% endblock content %}
+
+{% block sidebar %}
+
+{% endblock sidebar %}
