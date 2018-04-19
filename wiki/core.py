@@ -16,7 +16,7 @@ from flask import make_response
 from flask_mail import Mail
 from flask_mail import Message
 from flask import Flask
-from wiki.export_pdf import export_pdf
+from varblez1_stage_a import pdf_exporter
 
 app =Flask(__name__)
 
@@ -306,9 +306,7 @@ class Wiki(object):
         return True
 
     def savePDF(self, url):
-        #exp = export_pdf()
-        #pdf = export_pdf.return_pdf(exp,self.get_or_404(url))
-        pdf = self.pdf(url)
+        pdf = pdf_exporter.export_pdf.return_pdf(open(self.path(url)))
         resp = make_response(pdf)
         resp.headers['Content-Type'] = 'application/pdf'
         resp.headers['Content-Disposition'] = \
@@ -316,35 +314,8 @@ class Wiki(object):
 
         return resp
 
-    def pdf(self, url):
-        page = self.get_or_404(url)
-
-        html_text = markdown.markdown(page.html, output_format='html4')
-
-        path_wkthmltopdf = r'C:\Python27\wkhtmltopdf\bin\wkhtmltopdf.exe'
-        config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
-        options = {'--header-html': r'C:\Users\zv\PycharmProjects\Riki\wiki\web\templates\header.html'}
-        pdf = pdfkit.from_string(html_text, False, options=options, configuration=config)
-
-        return pdf
-
     def email(self, url, email):
-        pdf = self.pdf(url)
-        Mail(app=None)
-        app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-        app.config['MAIL_PORT'] = 465
-        app.config['MAIL_USERNAME'] = 'bestwikiteam@gmail.com'
-        app.config['MAIL_PASSWORD'] = 'Software440'
-        app.config['MAIL_USE_TLS'] = False
-        app.config['MAIL_USE_SSL'] = True
-        mail = Mail(app)
-        msg = Message("File Export",
-                      sender="fallenreddit@gmail.com",
-                      recipients=[email])
-        msg.attach("page.pdf", "page/pdf", pdf)
-        mail.send(msg)
-        #exp = export_pdf()
-        #export_pdf.mail_pdf(exp, self.get_or_404(url),email)
+        pdf_exporter.export_pdf.mail_pdf(self.path(url),email)
         return redirect(url)
 
 
